@@ -1,0 +1,42 @@
+## Interface: 120000
+## Title: TweaksUI
+## Notes: Modular UI enhancement suite - cooldowns, chat, auras, action bars, unit frames, and more
+## Author: Meltheran
+## Version: 0.9.5
+## SavedVariables: TweaksUI_DB
+## SavedVariablesPerCharacter: TweaksUI_CharDB
+## OptionalDeps: Masque, LibSharedMedia-3.0, CooldownManagerTweaks
+## X-Category: Interface Enhancements
+## X-Website: https://www.curseforge.com/wow/addons/tweaksui
+## IconTexture: Interface\AddOns\TweaksUI\Media\icon
+
+# Migration (MUST load first to capture CMT_DB before anything else)
+Core\Migration.lua
+
+# Libraries
+Libs\LibStub\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+Libs\LibSharedMedia-3.0\LibSharedMedia-3.0.lua
+Libs\LibEditMode\LibEditMode.lua
+Libs\LibEditMode\pools.lua
+Libs\LibEditMode\widgets\dialog.lua
+Libs\LibEditMode\widgets\dropdown.lua
+Libs\LibEditMode\widgets\slider.lua
+Libs\LibEditMode\widgets\checkbox.lua
+Libs\LibEditMode\widgets\button.lua
+
+# Core
+Core\Constants.lua
+Core\Database.lua
+Core\Events.lua
+Core\ModuleManager.lua
+Core\Media.lua
+Core\Utilities.lua
+Core\Settings.lua
+Core\Main.lua
+
+# Modules - Each module loads its own files
+Modules\Cooldowns\Cooldowns.lua
+Modules\Cooldowns\CooldownManagerTweaks.lua
+Modules\Chat\Chat.lua
+Modules\UnitFrames\UnitFrames.lua

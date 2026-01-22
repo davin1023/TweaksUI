@@ -1,0 +1,107 @@
+## Interface: 120000
+## Title: !TweaksUI
+## Notes: Modular UI enhancement suite - cooldowns, unit frames, nameplates, cast bars, chat, and more|n|cffff0000Requires Midnight (12.0.0+)|r|n|cff00ff00v2.0.0-Docks:|r Dynamic Docks, Duration Objects, Smooth Bars, Secret Value Support
+## Author: Meltheran
+## Version: 2.0.5
+## SavedVariables: TweaksUI_DB
+## SavedVariablesPerCharacter: TweaksUI_CharDB
+## OptionalDeps: Masque, LibSharedMedia-3.0
+## X-Category: Interface Enhancements
+## X-Website: https://www.curseforge.com/wow/addons/tweaksui
+## IconTexture: Interface\AddOns\!TweaksUI\Media\icon
+
+# Libraries
+Libs\LibStub\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+Libs\LibSharedMedia-3.0\LibSharedMedia-3.0.lua
+Libs\LibDeflate\LibDeflate.lua
+Libs\LibFlyPaper-2.0\LibFlyPaper-2.0.lua
+
+# Core
+Core\Constants.lua
+Core\API\API.lua
+Core\API\SpellAPI.lua
+Core\API\AuraAPI.lua
+Core\API\UnitAPI.lua
+Core\API\DurationAPI.lua
+Core\API\RestrictionAPI.lua
+Core\API\SecretAPI.lua
+Core\API\StatusBarAPI.lua
+Core\API\CurveAPI.lua
+Core\Database.lua
+Core\GlobalScale.lua
+Core\CMTMigration.lua
+Core\Events.lua
+Core\TUIFrame.lua
+Core\BarMasking.lua
+Core\SnapLocking.lua
+Core\ModuleManager.lua
+Core\Media.lua
+Core\Utilities.lua
+Core\TabbedPanel.lua
+Core\Performance.lua
+Core\Import.lua
+Core\BaseProfile.lua
+Core\Profiles.lua
+Core\Presets.lua
+Core\PresetData.lua
+Core\PresetDropdown.lua
+Core\ProfileImportExport.lua
+Core\DefaultProfiles.lua
+Core\Settings.lua
+Core\SetupWizard.lua
+Core\Main.lua
+
+# Modules
+Modules\General\General.lua
+Modules\General\MinimapFrame.lua
+Modules\General\ObjectiveTrackerFrame.lua
+Modules\General\UIFrameContainers.lua
+Modules\General\CharacterPanel.lua
+Modules\Profiles\ProfilesUI.lua
+Modules\Cooldowns\Cooldowns.lua
+Modules\Cooldowns\CooldownClones.lua
+Modules\Cooldowns\BuffHighlights.lua
+Modules\Cooldowns\CooldownHighlights.lua
+Modules\Cooldowns\SpellbookHelper.lua
+Modules\Cooldowns\Docks.lua
+Modules\Cooldowns\DocksUI.lua
+Modules\Chat\Chat.lua
+
+# UnitFrames Module (split into multiple files)
+Modules\UnitFrames\TestMode.lua
+Modules\UnitFrames\Sorting.lua
+Modules\UnitFrames\RangeFade.lua
+Modules\UnitFrames\HealPrediction.lua
+Modules\UnitFrames\DefensiveIcons.lua
+Modules\UnitFrames\DispelOverlay.lua
+Modules\UnitFrames\ThreatOverlay.lua
+Modules\UnitFrames\Auras.lua
+Modules\UnitFrames\UnitFrames.lua
+Modules\CastBars\CastBars.lua
+
+# Nameplates Module (split into multiple files)
+Modules\Nameplates\Nameplates.lua
+Modules\Nameplates\CVars.lua
+Modules\Nameplates\HealthBars.lua
+Modules\Nameplates\TextElements.lua
+Modules\Nameplates\CastBars.lua
+Modules\Nameplates\Highlights.lua
+Modules\Nameplates\Icons.lua
+Modules\Nameplates\Auras.lua
+Modules\Nameplates\Simulation.lua
+Modules\Nameplates\UIHelpers.lua
+Modules\Nameplates\Hub.lua
+Modules\Nameplates\Panels.lua
+Modules\Nameplates\HealthBarPanels.lua
+Modules\Nameplates\TabbedPanels.lua
+
+Modules\PersonalResources\PersonalResources.lua
+Modules\ActionBars\ActionBars.lua
+Modules\ActionBars\ActionBarContainers.lua
+
+# Layout Module (loads last - other modules register elements first)
+Modules\Layout\Layout.lua
+Modules\Layout\LayoutUI.lua
+Modules\Layout\LayoutElements.lua
+Modules\Layout\UIElements.lua

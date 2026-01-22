@@ -1,0 +1,160 @@
+================================================================================
+TweaksUI Changelog
+================================================================================
+
+================================================================================
+Version 2.0.5 - Midnight Native Release (January 2026)
+================================================================================
+
+⚠️  BREAKING CHANGE: MIDNIGHT REQUIRED
+--------------------------------------
+  This version requires World of Warcraft: Midnight (12.0.0+).
+  It will NOT load on The War Within or earlier versions.
+  
+  If you need TWW support, use TweaksUI 1.9.x from CurseForge.
+
+WHAT'S NEW IN 2.0.0
+-------------------
+
+Duration Objects
+  All cooldowns and timers now use Midnight's native Duration Object system.
+  This provides more accurate tracking and smoother visual updates.
+  
+  • Cooldown spirals use SetCooldownFromDurationObject()
+  • Cast bars use timer status bars with automatic updates
+  • Aura timers use C_UnitAuras.GetUnitAuraDuration()
+
+Smooth Status Bars
+  Health, power, and cast bars now smoothly animate between values using
+  Midnight's native StatusBar interpolation system.
+  
+  • ExponentialEaseOut transitions for natural-feeling updates
+  • Timer bars auto-update without manual OnUpdate handlers
+  • Reduced CPU usage from animation code
+
+Secret Value Support
+  Full compatibility with Midnight's addon restriction system. During
+  restricted content (M+ dungeons, raid encounters, PvP), some values
+  become "secret" and cannot be read by addons.
+  
+  • Graceful handling of secret values throughout all modules
+  • UI elements update appropriately when restrictions are active
+  • Uses SetAlphaFromBoolean() for range fade during combat
+  • No more "attempt to compare secret value" errors
+
+Range Fade for Unit Frames
+  Party, raid, and individual unit frames fade when units are out of range.
+  
+  • Party/Raid frames: Uses UnitInRange() with SetAlphaFromBoolean()
+  • Target/Focus/Pet frames: Uses multiple detection methods
+  • Configurable fade alpha (default 40%)
+  • Per-element fade option (fade bars/text instead of whole frame)
+  • Debug commands: /tuirange status, /tuirangeindiv status
+
+Aura System Improvements
+  Leveraging Midnight's enhanced aura APIs for better buff/debuff tracking.
+  
+  • Native aura sorting by expiration time, name, or index
+  • Efficient aura iteration via GetUnitAuraInstanceIDs()
+  • Improved dispel type detection and coloring
+
+Curve System
+  Color curves for dynamic health bar coloring and other visual effects.
+  
+  • Health bars can gradient from red (low) to green (full)
+  • Cooldown elements can color-code based on remaining time
+  • Pre-built curves for common use cases
+
+Restriction State Monitoring
+  Track when addon restrictions are active and respond appropriately.
+  
+  • ADDON_RESTRICTION_STATE_CHANGED event handling
+  • Combat, Encounter, M+, PvP, and Map restriction awareness
+  • Internal events for modules to respond to restriction changes
+
+BUG FIXES
+---------
+
+Fixed ADDON_ACTION_BLOCKED Errors
+  Replaced all EnableMouse() calls on protected Blizzard frames with
+  off-screen positioning (-10000, 10000). This prevents errors during combat
+  and restricted scenarios.
+
+Fixed Range Fade During Combat
+  Range fade now uses SetAlphaFromBoolean() to handle Midnight secret values
+  properly. Party frames no longer show all members as "out of range" during
+  dungeon combat.
+
+Fixed Blizzard Cast Bar Showing During Interrupts
+  Added comprehensive hooks to hide Blizzard's cast bar during interrupt
+  animations (SetStatusBarColor, Flash, SetShown). No more duplicate cast
+  bars appearing briefly when spells are interrupted.
+
+Fixed Defensive Icons Showing Wrong Buffs
+  DefensiveIcons now validates each aura against our curated defensive spell
+  database instead of trusting Blizzard's "BigDefensive" sort blindly.
+
+Fixed "main function has more than 200 local variables" Error
+  Converted state tables to module properties to stay under Lua's limit.
+
+Fixed PLAYER_LOGOUT Frame Restoration
+  All Blizzard frames are restored to original parents/positions on logout
+  to prevent "Couldn't find region" errors if addon is removed.
+
+TECHNICAL CHANGES
+-----------------
+
+• Added IsInRestrictedScenario() helper function
+• Hooks skip execution during restricted scenarios
+• Off-screen positioning replaces EnableMouse() for frame hiding
+• Forward declarations used to avoid scope issues
+• Helper functions exposed on module tables for debugging
+
+NEW API WRAPPER SYSTEM
+----------------------
+Created comprehensive Midnight-native API wrappers in Core/API/:
+
+  • SpellAPI.lua - C_Spell namespace with Duration Object support
+  • AuraAPI.lua - C_UnitAuras with sorting and instance IDs
+  • UnitAPI.lua - Health, power, and unit comparison functions
+  • DurationAPI.lua - Duration Object creation and application
+  • RestrictionAPI.lua - Addon restriction state monitoring
+  • SecretAPI.lua - Secret value handling utilities
+  • StatusBarAPI.lua - Smooth bars and timer functions
+  • CurveAPI.lua - Curve and color curve creation
+
+DEBUG COMMANDS
+--------------
+  /tuiapi - Print API availability status
+  /tuirestrict - Print current restriction states
+  /tui patchnotes - Show this changelog in-game
+
+REMOVED
+-------
+  • All TWW/legacy fallback code
+  • Feature detection flags (HAS_* variables)
+  • Legacy spell/aura API patterns (GetSpellInfo, UnitAura, etc.)
+  • Combat log event parsing (no longer available to addons in Midnight)
+
+MIGRATING FROM 1.9.x
+--------------------
+  Your settings will be preserved when upgrading:
+  
+  • Profile data is compatible
+  • Custom entries transfer automatically
+  • Position data is preserved
+  • No manual steps required
+
+  Note: Some features may show "?" during M+/encounters due to Midnight's
+  addon restrictions. This is intended behavior per Blizzard's API changes.
+
+
+================================================================================
+Previous Versions
+================================================================================
+
+For changelog history of versions 1.0.0 through 1.9.3, see the CurseForge
+page or the addon's GitHub repository.
+
+TweaksUI 1.x supported The War Within (11.0.0 - 11.1.x).
+TweaksUI 2.x requires Midnight (12.0.0+) and will not load on earlier versions.

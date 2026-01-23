@@ -1,7 +1,8 @@
 -- ============================================================================
--- TweaksUI: Performance Monitor v1.9.0
--- Tracks FPS, memory, and addon performance metrics
+-- TweaksUI: Performance Monitor v2.0.0
+-- Tracks FPS, CPU usage, memory, and addon performance metrics
 -- Usage: /tuistats to toggle the display
+-- Note: CPU tracking requires scriptProfile cvar to be enabled
 -- ============================================================================
 
 local ADDON_NAME, TweaksUI = ...
@@ -25,6 +26,12 @@ local IsInRaid = IsInRaid
 local C_Timer = C_Timer
 local CreateFrame = CreateFrame
 
+-- CPU tracking (may not be available if script profiling is disabled)
+local GetAddOnCPUUsage = GetAddOnCPUUsage
+local ResetCPUUsage = ResetCPUUsage
+local UpdateAddOnCPUUsage = UpdateAddOnCPUUsage
+local scriptProfileEnabled = GetCVarBool("scriptProfile")
+
 -- ============================================================================
 -- PERFORMANCE MONITOR
 -- ============================================================================
@@ -46,6 +53,12 @@ local stats = {
         current = 0,
         baseline = 0,
         peak = 0,
+    },
+    cpu = {
+        lastCPU = 0,        -- Last cumulative CPU reading
+        lastTime = 0,       -- Time of last reading
+        msPerSec = 0,       -- ms of CPU used per second (rate)
+        available = false,  -- Whether CPU profiling is available
     },
     latency = {
         home = 0,
@@ -95,6 +108,31 @@ local function UpdateStats()
         stats.memory.baseline = stats.memory.current
     end
     stats.memory.peak = max(stats.memory.peak, stats.memory.current)
+    
+    -- CPU Usage (requires scriptProfile cvar to be enabled)
+    -- Shows ms of CPU used per second (rate)
+    if scriptProfileEnabled and UpdateAddOnCPUUsage and GetAddOnCPUUsage then
+        stats.cpu.available = true
+        UpdateAddOnCPUUsage()
+        
+        local currentCPU = GetAddOnCPUUsage(ADDON_NAME) or 0
+        local currentTime = GetTime()
+        
+        -- Calculate ms/sec rate based on delta
+        if stats.cpu.lastTime > 0 then
+            local cpuDelta = currentCPU - stats.cpu.lastCPU
+            local timeDelta = currentTime - stats.cpu.lastTime
+            
+            if timeDelta > 0 then
+                stats.cpu.msPerSec = cpuDelta / timeDelta
+            end
+        end
+        
+        stats.cpu.lastCPU = currentCPU
+        stats.cpu.lastTime = currentTime
+    else
+        stats.cpu.available = false
+    end
     
     -- Latency
     local _, _, latencyHome, latencyWorld = GetNetStats()
@@ -157,7 +195,7 @@ local function CreateDisplayFrame()
     if displayFrame then return displayFrame end
     
     displayFrame = CreateFrame("Frame", "TweaksUI_PerformanceFrame", UIParent, "BackdropTemplate")
-    displayFrame:SetSize(280, 180)
+    displayFrame:SetSize(280, 210)  -- Increased height for CPU info
     displayFrame:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -20, -200)
     displayFrame:SetFrameStrata("HIGH")
     displayFrame:SetMovable(true)
@@ -166,6 +204,11 @@ local function CreateDisplayFrame()
     displayFrame:SetScript("OnDragStart", displayFrame.StartMoving)
     displayFrame:SetScript("OnDragStop", displayFrame.StopMovingOrSizing)
     displayFrame:SetClampedToScreen(true)
+    
+    -- Prevent ESC from closing this frame (don't add to UISpecialFrames)
+    -- Also block keyboard propagation to prevent ESC handling
+    displayFrame:SetPropagateKeyboardInput(true)
+    displayFrame:EnableKeyboard(false)
     
     displayFrame:SetBackdrop({
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
@@ -214,6 +257,18 @@ local function UpdateDisplay()
         fpsColor = "|cffffff00"  -- Yellow
     end
     
+    -- Color coding for CPU (ms used per second)
+    local cpuColor = "|cff00ff00"  -- Green
+    local cpuStr = "N/A (enable scriptProfile)"
+    if stats.cpu.available then
+        if stats.cpu.msPerSec > 10 then
+            cpuColor = "|cffff0000"  -- Red
+        elseif stats.cpu.msPerSec > 5 then
+            cpuColor = "|cffffff00"  -- Yellow
+        end
+        cpuStr = format("%s%.1f|r ms/sec", cpuColor, stats.cpu.msPerSec)
+    end
+    
     -- Combat indicator
     local combatStr = stats.combat.inCombat and "|cffff0000[COMBAT]|r" or "|cff00ff00[Safe]|r"
     
@@ -221,13 +276,14 @@ local function UpdateDisplay()
 %s %s
 
 |cffffd100FPS:|r %s%.0f|r (avg: %.0f, min: %.0f, max: %.0f)
+|cffffd100CPU:|r %s
 |cffffd100Memory:|r %.1f MB (%s%.1f MB)
 |cffffd100Peak:|r %.1f MB
 |cffffd100Latency:|r %dms home / %dms world
 
 |cffffd100Scenario:|r %s
 
-|cff888888Drag to move, /tuistats to toggle|r
+|cff888888Drag to move, click X to close|r
 ]],
         combatStr,
         GetScenario(),
@@ -236,6 +292,7 @@ local function UpdateDisplay()
         avgFPS,
         stats.fps.min,
         stats.fps.max,
+        cpuStr,
         stats.memory.current / 1024,
         memSign,
         memDiff / 1024,
@@ -299,6 +356,9 @@ function Performance:ResetStats()
     stats.fps.sampleCount = 0
     stats.memory.baseline = stats.memory.current
     stats.memory.peak = stats.memory.current
+    stats.cpu.lastCPU = 0
+    stats.cpu.lastTime = 0
+    stats.cpu.msPerSec = 0
     stats.updateCounts = {
         nameplateUpdates = 0,
         nameplateSkips = 0,
@@ -315,6 +375,11 @@ function Performance:PrintReport()
     print("|cffffd100=== TweaksUI Performance Report ===|r")
     print(format("  FPS: %.0f (avg: %.0f, range: %.0f-%.0f)", 
         stats.fps.current, avgFPS, stats.fps.min, stats.fps.max))
+    if stats.cpu.available then
+        print(format("  CPU: %.1f ms/sec", stats.cpu.msPerSec))
+    else
+        print("  CPU: N/A (enable scriptProfile cvar)")
+    end
     print(format("  Memory: %.1f MB (delta: %+.1f MB, peak: %.1f MB)",
         stats.memory.current / 1024, memDiff / 1024, stats.memory.peak / 1024))
     print(format("  Latency: %dms / %dms", stats.latency.home, stats.latency.world))

@@ -11433,6 +11433,39 @@ function Cooldowns:OnEnable()
             for _, tracker in ipairs(TRACKERS) do
                 local viewer = _G[tracker.name]
                 if viewer then
+                    -- Fix potential duplicate layoutIndex before showing (Blizzard CDM stale icon bug)
+                    pcall(function()
+                        local children = {viewer:GetChildren()}
+                        local seenIndices = {}
+                        local hasDuplicates = false
+                        
+                        for _, child in ipairs(children) do
+                            if child.layoutIndex then
+                                if seenIndices[child.layoutIndex] then
+                                    hasDuplicates = true
+                                    break
+                                end
+                                seenIndices[child.layoutIndex] = true
+                            end
+                        end
+                        
+                        if hasDuplicates then
+                            local iconsWithIndex = {}
+                            for _, child in ipairs(children) do
+                                if child.layoutIndex then
+                                    table.insert(iconsWithIndex, child)
+                                end
+                            end
+                            table.sort(iconsWithIndex, function(a, b)
+                                return (a.layoutIndex or 0) < (b.layoutIndex or 0)
+                            end)
+                            for i, icon in ipairs(iconsWithIndex) do
+                                icon.layoutIndex = i
+                            end
+                            dprint("Fixed duplicate layoutIndex for " .. tracker.key .. " in Layout Mode")
+                        end
+                    end)
+                    
                     -- Wrap in pcall to handle Midnight secret value errors
                     pcall(function()
                         viewer:Show()

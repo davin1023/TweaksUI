@@ -5,7 +5,7 @@
 local ADDON_NAME, TweaksUI = ...
 
 -- Version info
-TweaksUI.VERSION = "2.0.5"
+TweaksUI.VERSION = "2.0.8"
 TweaksUI.ADDON_NAME = ADDON_NAME
 
 -- Build info - Midnight-only (12.0.0+)

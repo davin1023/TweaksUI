@@ -29,7 +29,7 @@ local FRAME_PREFIX = "TweaksUI_BuffHighlight_"
 
 local highlightFrames = {}  -- [slotIndex] = frame
 local cachedTextures = {}   -- [slotIndex] = textureID (captured when per-icon enabled, static)
--- updateFrame is defined in the UPDATE SYSTEM section
+-- Update system uses unified CooldownHighlights system
 local isInitialized = false
 
 -- Debug mode
@@ -1761,27 +1761,43 @@ local function RegisterAllWithLayout()
 end
 
 -- ============================================================================
--- UPDATE SYSTEM - Simple OnUpdate for reliable updates
+-- UPDATE SYSTEM - Uses unified system from CooldownHighlights
 -- ============================================================================
 
-local updateFrame = nil
+local isActive = false  -- Whether any buff highlights are enabled
 
 local function StartUpdateTicker()
-    if updateFrame then return end
+    if isActive then return end
     
-    updateFrame = CreateFrame("Frame")
-    updateFrame:SetScript("OnUpdate", function(self, elapsed)
-        pcall(UpdateAllHighlights)
-    end)
+    isActive = true
     
-    dprint("Update OnUpdate started")
+    -- Register with the unified update system in CooldownHighlights
+    if TweaksUI.CooldownHighlights and TweaksUI.CooldownHighlights.RegisterExternalTracker then
+        TweaksUI.CooldownHighlights:RegisterExternalTracker("buffs", UpdateAllHighlights)
+        dprint("BuffHighlights: Registered with unified update system")
+    else
+        dprint("BuffHighlights: WARNING - CooldownHighlights not available for unified updates")
+    end
 end
 
 local function StopUpdateTicker()
-    if updateFrame then
-        updateFrame:SetScript("OnUpdate", nil)
-        updateFrame = nil
-        dprint("Update OnUpdate stopped")
+    -- Check if any highlights still enabled
+    local hasEnabled = false
+    local db = GetDB()
+    if db and db.enabled then
+        for _, enabled in pairs(db.enabled) do
+            if enabled then hasEnabled = true break end
+        end
+    end
+    
+    if not hasEnabled then
+        isActive = false
+        
+        -- Unregister from unified update system
+        if TweaksUI.CooldownHighlights and TweaksUI.CooldownHighlights.UnregisterExternalTracker then
+            TweaksUI.CooldownHighlights:UnregisterExternalTracker("buffs")
+            dprint("BuffHighlights: Unregistered from unified update system")
+        end
     end
 end
 
@@ -2103,6 +2119,13 @@ end
 function BuffHighlights:RefreshAllHighlights()
     -- Refresh all highlight frames (used when tracker-level settings change)
     UpdateAllHighlights()
+end
+
+function BuffHighlights:MarkDirty()
+    -- Mark as needing update (uses unified system from CooldownHighlights)
+    if TweaksUI.CooldownHighlights and TweaksUI.CooldownHighlights.MarkDirty then
+        TweaksUI.CooldownHighlights:MarkDirty("buffs")
+    end
 end
 
 function BuffHighlights:IsTrackerHidden()
@@ -2648,7 +2671,7 @@ SlashCmdList["TUIBUFFHIGHLIGHTS"] = function(msg)
         -- Show current status of everything
         print("|cff00ff00=== BuffHighlights Status ===|r")
         print("Initialized: " .. tostring(isInitialized))
-        print("Update OnUpdate running: " .. tostring(updateFrame ~= nil))
+        print("Unified update active: " .. tostring(isActive))
         print("Hide enforcement running: " .. tostring(hideEnforcementTicker ~= nil))
         print("Tracker hidden setting: " .. tostring(IsTrackerHidden()))
         print("In combat: " .. tostring(InCombatLockdown()))

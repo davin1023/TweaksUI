@@ -1826,30 +1826,148 @@ local function RegisterAllWithLayout(trackerKey)
 end
 
 -- ============================================================================
--- UPDATE SYSTEM - Simple OnUpdate for reliable updates
+-- UNIFIED UPDATE SYSTEM - Event-driven updates for all CDM trackers
+-- Handles essential, utility, and buffs with a single event frame
 -- ============================================================================
 
-local updateFrames = {}  -- [trackerKey] = frame
+-- Internal trackers (essential/utility) use UpdateAllHighlights
+-- External trackers (buffs) register their own update functions
+local activeTrackers = {}      -- [trackerKey] = { isInternal = bool, updateFunc = func or nil }
+local dirtyTrackers = {}       -- [trackerKey] = true when needs update
+local updateEventFrame = nil
+local updateThrottleTimer = 0
+local UPDATE_THROTTLE = 0.05   -- Process dirty trackers 20x per second max
+local layoutModeCheckTimer = 0
+local LAYOUT_MODE_CHECK_INTERVAL = 0.25  -- Check layout mode 4x per second
 
+local function MarkTrackerDirty(trackerKey)
+    if trackerKey then
+        dirtyTrackers[trackerKey] = true
+    else
+        -- Mark all active trackers dirty
+        for key, _ in pairs(activeTrackers) do
+            dirtyTrackers[key] = true
+        end
+    end
+end
+
+local function ProcessDirtyTrackers()
+    for trackerKey, isDirty in pairs(dirtyTrackers) do
+        if isDirty and activeTrackers[trackerKey] then
+            local trackerInfo = activeTrackers[trackerKey]
+            if trackerInfo.isInternal then
+                -- Internal tracker (essential/utility) - use UpdateAllHighlights
+                pcall(UpdateAllHighlights, trackerKey)
+            elseif trackerInfo.updateFunc then
+                -- External tracker (buffs) - use registered function
+                pcall(trackerInfo.updateFunc)
+            end
+            dirtyTrackers[trackerKey] = false
+        end
+    end
+end
+
+local function OnUpdateEvent(self, event, unit, ...)
+    if event == "SPELL_UPDATE_COOLDOWN" or event == "SPELL_UPDATE_CHARGES" or event == "ACTIONBAR_UPDATE_COOLDOWN" then
+        -- Cooldown changed - mark cooldown trackers dirty
+        MarkTrackerDirty("essential")
+        MarkTrackerDirty("utility")
+    elseif event == "UNIT_AURA" then
+        -- Aura changed - mark buff tracker dirty (only for player)
+        if unit == "player" then
+            MarkTrackerDirty("buffs")
+        end
+    elseif event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_REGEN_DISABLED" then
+        -- Combat state changed - update all
+        MarkTrackerDirty()
+    end
+end
+
+local function OnUpdateThrottle(self, elapsed)
+    updateThrottleTimer = updateThrottleTimer + elapsed
+    layoutModeCheckTimer = layoutModeCheckTimer + elapsed
+    
+    -- Process dirty trackers
+    if updateThrottleTimer >= UPDATE_THROTTLE then
+        updateThrottleTimer = 0
+        ProcessDirtyTrackers()
+    end
+    
+    -- Check layout mode periodically (for show/hide in layout vs normal mode)
+    if layoutModeCheckTimer >= LAYOUT_MODE_CHECK_INTERVAL then
+        layoutModeCheckTimer = 0
+        local layoutContainer = _G["TweaksUI_LayoutContainer"]
+        local isLayoutMode = layoutContainer and layoutContainer:IsShown()
+        
+        -- If in layout mode, force update all active trackers
+        if isLayoutMode then
+            MarkTrackerDirty()
+        end
+    end
+end
+
+local function EnsureEventFrameExists()
+    if updateEventFrame then return end
+    
+    updateEventFrame = CreateFrame("Frame")
+    updateEventFrame:SetScript("OnEvent", OnUpdateEvent)
+    updateEventFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
+    updateEventFrame:RegisterEvent("SPELL_UPDATE_CHARGES")
+    updateEventFrame:RegisterEvent("ACTIONBAR_UPDATE_COOLDOWN")
+    updateEventFrame:RegisterEvent("UNIT_AURA")  -- For buff tracker
+    updateEventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+    updateEventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
+    
+    -- Throttled OnUpdate for processing dirty trackers
+    updateEventFrame:SetScript("OnUpdate", OnUpdateThrottle)
+    
+    dprint("Unified CDM update system started")
+end
+
+-- Internal function for essential/utility trackers
 local function StartUpdateTicker(trackerKey)
-    if updateFrames[trackerKey] then return end
+    if activeTrackers[trackerKey] then return end
     
-    local updateFrame = CreateFrame("Frame")
+    activeTrackers[trackerKey] = { isInternal = true, updateFunc = nil }
+    EnsureEventFrameExists()
     
-    updateFrame:SetScript("OnUpdate", function(self, elapsed)
-        pcall(UpdateAllHighlights, trackerKey)
-    end)
+    -- Initial update
+    MarkTrackerDirty(trackerKey)
     
-    updateFrames[trackerKey] = updateFrame
-    dprint("Started OnUpdate:", trackerKey)
+    dprint("Started internal updates for:", trackerKey)
 end
 
 local function StopUpdateTicker(trackerKey)
-    if updateFrames[trackerKey] then
-        updateFrames[trackerKey]:SetScript("OnUpdate", nil)
-        updateFrames[trackerKey] = nil
-        dprint("Stopped OnUpdate:", trackerKey)
+    if activeTrackers[trackerKey] then
+        activeTrackers[trackerKey] = nil
+        dirtyTrackers[trackerKey] = nil
+        dprint("Stopped updates for:", trackerKey)
     end
+end
+
+-- ============================================================================
+-- PUBLIC API FOR EXTERNAL TRACKERS (BuffHighlights)
+-- ============================================================================
+
+function CooldownHighlights:RegisterExternalTracker(trackerKey, updateFunc)
+    -- Register an external tracker (like buffs) with the unified update system
+    activeTrackers[trackerKey] = { isInternal = false, updateFunc = updateFunc }
+    EnsureEventFrameExists()
+    MarkTrackerDirty(trackerKey)
+    dprint("Registered external tracker:", trackerKey)
+end
+
+function CooldownHighlights:UnregisterExternalTracker(trackerKey)
+    if activeTrackers[trackerKey] and not activeTrackers[trackerKey].isInternal then
+        activeTrackers[trackerKey] = nil
+        dirtyTrackers[trackerKey] = nil
+        dprint("Unregistered external tracker:", trackerKey)
+    end
+end
+
+function CooldownHighlights:MarkDirty(trackerKey)
+    -- Mark tracker(s) as needing update (for external callers)
+    MarkTrackerDirty(trackerKey)
 end
 
 -- ============================================================================
@@ -2213,6 +2331,70 @@ function CooldownHighlights:RefreshAllHighlights(trackerKey)
     UpdateAllHighlights(trackerKey)
 end
 
+-- Helper to check for CDM viewer layout issues (duplicate icons, stale state)
+local function HasViewerLayoutIssue(viewer)
+    local hasIssue = false
+    local iconCount = 0
+    
+    pcall(function()
+        local seenIndices = {}
+        local children = {viewer:GetChildren()}
+        
+        for _, child in ipairs(children) do
+            -- Check if this looks like a CDM icon (has layoutIndex and cooldownID)
+            if child.layoutIndex then
+                -- Check for duplicate layoutIndex (Blizzard bug with stale icons between characters)
+                if seenIndices[child.layoutIndex] then
+                    hasIssue = true
+                    dprint("Duplicate layoutIndex found:", child.layoutIndex)
+                    return  -- Exit early, no need to check more
+                end
+                seenIndices[child.layoutIndex] = true
+                
+                -- Count valid icons
+                if child.cooldownID then
+                    iconCount = iconCount + 1
+                end
+            end
+        end
+    end)
+    
+    return hasIssue, iconCount
+end
+
+-- Fix duplicate layoutIndex values by reassigning unique indices to all icons
+local function FixViewerLayoutIndices(viewer)
+    local fixed = false
+    
+    pcall(function()
+        local children = {viewer:GetChildren()}
+        local iconsWithIndex = {}
+        
+        -- Collect all icons that have layoutIndex
+        for _, child in ipairs(children) do
+            if child.layoutIndex then
+                table.insert(iconsWithIndex, child)
+            end
+        end
+        
+        -- Sort by existing layoutIndex to try to preserve relative order
+        table.sort(iconsWithIndex, function(a, b)
+            return (a.layoutIndex or 0) < (b.layoutIndex or 0)
+        end)
+        
+        -- Reassign sequential layoutIndex values
+        for i, icon in ipairs(iconsWithIndex) do
+            if icon.layoutIndex ~= i then
+                dprint("Fixing layoutIndex:", icon.layoutIndex, "->", i)
+                icon.layoutIndex = i
+                fixed = true
+            end
+        end
+    end)
+    
+    return fixed
+end
+
 function CooldownHighlights:ApplyTrackerVisibility(trackerKey)
     local viewer = GetViewer(trackerKey)
     if not viewer then return end
@@ -2229,6 +2411,15 @@ function CooldownHighlights:ApplyTrackerVisibility(trackerKey)
         
         -- Only call Show() if viewer is actually hidden, and protect against secret value errors
         if not viewer:IsShown() then
+            -- Check for layout issues before showing (Blizzard CDM bug with stale icons)
+            local hasLayoutIssue, iconCount = HasViewerLayoutIssue(viewer)
+            
+            if hasLayoutIssue then
+                -- Fix the duplicate layoutIndex values before showing
+                dprint("Fixing duplicate layoutIndex for " .. trackerKey .. " (Blizzard CDM stale icon bug)")
+                FixViewerLayoutIndices(viewer)
+            end
+            
             -- Fix Midnight Beta secret value issue before showing
             pcall(function()
                 for _, child in ipairs({viewer:GetChildren()}) do
